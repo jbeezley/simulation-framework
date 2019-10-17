@@ -7,6 +7,7 @@ import attr
 import numpy as np
 
 from simulation.validation import context as validation_context
+from simulation.geometry import Geometry, Quadric, Vector
 
 if TYPE_CHECKING:  # prevent circular imports for type checking
     from simulation.config import SimulationConfig  # noqa
@@ -93,6 +94,7 @@ class State(object):
     """A container for storing the simulation state at a single time step."""
     time: float
     grid: RectangularGrid
+    geometry: Geometry
 
     # simulation configuration
     config: 'SimulationConfig'
@@ -136,7 +138,8 @@ class State(object):
             config.getfloat('simulation', 'dx')
         )
         grid = RectangularGrid.construct_uniform(shape, spacing)
-        state = State(time=0.0, grid=grid, config=config)
+        geometry = load_geo(config['simulation']['geometry_file'], config['simulation']['file_type'])
+        state = State(time=0.0, grid=grid, config=config, geometry=geometry)
 
         for module in state.config.modules:
             if hasattr(state, module.name):
@@ -183,3 +186,34 @@ def grid_variable(dtype: np.dtype = np.dtype('float')) -> np.ndarray:
             raise ValidationError(f'Invalid value in gridded variable {attribute.name}')
 
     return attr.ib(default=attr.Factory(factory, takes_self=True), validator=validate_numeric)
+
+def load_geo(input_file: str, input_type: str) -> Geometry:
+    import json
+    from simulation.macro import QUADRIC
+    from simulation.macro import VECTOR
+
+    g = Geometry()    
+
+    # starts empty, will be filled    
+    
+    if(input_type == 'rvtk'):
+        g.load_from_vtk(input_file)
+    
+    elif( input_type == 'rjson'):
+        with open(input_file) as f:
+            data = json.load(f)
+            dimen = data["dimension"]
+            g = Geometry(dimen["xbin"], dimen["ybin"], dimen["zbin"], data["multi_process"], data["vessel layer"])
+            #pprint(data)
+            for function in data["function"]:
+                
+                if (function["type"] == QUADRIC):
+                    f = Quadric(function)
+                    g.add(f)
+                elif (function["type"] == VECTOR):
+                    f = Vector(function)
+                    g.add(f)
+            
+            g.scaling(data["scaling"])
+            g.construct()
+    return g

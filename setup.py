@@ -8,7 +8,11 @@ setup(
         'attrs',
         'click',
         'matplotlib',
-        'numpy'
+        'numpy',
+        'json',
+        'scipy',
+        'vtk',
+        'tqdm'
     ],
     entry_points={
         'console_scripts': [

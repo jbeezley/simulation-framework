@@ -1,6 +1,8 @@
 [simulation]
 # maximum time step duration
 time_step = 0.05
+geometry_file = input.json
+file_type = rjson
 
 # number of grid points in each direction
 nx = 60
