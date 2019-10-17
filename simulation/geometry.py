@@ -124,8 +124,6 @@ class Geometry():
         self.zbin = zbin
 
         self.host = ''
-        self.redis_port = ''
-        self.redis_pwd = ''
 
         self.geo = Array(ctypes.c_double, xbin * ybin * zbin)
         self.overwrite = Array(ctypes.c_bool, xbin * ybin * zbin)
@@ -151,11 +149,6 @@ class Geometry():
         #geo = np.full((xbin,ybin,zbin), 2)
         self.duct_f = [] # function list
         self.sac_f = []
-
-    def set_http_redis(self, redis_url, redis_port, redis_password):
-        self.host = redis_url
-        self.redis_port = redis_port
-        self.redis_pwd = redis_password
 
     def set_vessel_layer_params(self, json):
         self.vessel_xmin = json["x_min"]
@@ -531,90 +524,6 @@ class Geometry():
         f.write(b)
         f.close()
 
-    def write_to_redis(self, url, port, pwd):
-        print("writing to redis ...")
-        sys.stdout.flush()
-
-        # r = redis.Redis(
-        #     host = url,
-        #     port = port, 
-        #     password = pwd)
-
-        # pipe = r.pipeline()
-
-        lungtissue = np.frombuffer(self.geo.get_obj())
-        lungtissue = lungtissue.astype(int)
-
-        # b = struct.pack(len(lungtissue) * 'B', *lungtissue)
-        # pipe.set("tissueTypeChar", b)
-        connector = GeoConnector(url, port, pwd)
-        connector.serialize_geo_1d(self.xbin, self.ybin, self.zbin, lungtissue)
-        #self.macrophage_movement_network()
-
-        #lungtissue = lungtissue.reshape(self.zbin,self.ybin,self.xbin)
-        #print(len(lungtissue))
-        # for x in range(self.xbin):
-        #     for y in range(self.ybin):
-        #         for z in range(self.zbin):
-        #             pipe.hset("tissueType", str(x) + "," + str(y) + "," + str(z), str(lungtissue[x][y][z]))
-
-        # for z in range(self.zbin):
-        #     xy_slide = b''
-        #     for y in range(self.ybin):
-        #         b = struct.pack(self.xbin * 'B', *lungtissue[z][y])
-        #         xy_slide += b
-        #     pipe.hset("tissueType", str(z), xy_slide)
-
-        # for x in range(self.xbin):
-        #     yz_slide_geo = []
-        #     for y in range(self.ybin):
-        #         for z in range(self.zbin):
-        #             yz_slide_geo.append(lungtissue[x][y][z])
-        #     b_geo = struct.pack(len(yz_slide) * 'B', *yz_slide_geo)
-        #     p.hset("tissueType", str(x), b_geo)
-        pipe = connector.get_pipeline()
-        pipe.hset("param", "x", str(self.xbin))
-        pipe.hset("param", "y", str(self.ybin))
-        pipe.hset("param", "z", str(self.zbin))
-        pipe.execute()
-
-        #self.macrophage_movement_network(self.macrophage_movement_layer(connector.get_redis()), connector.get_redis())
-
-        return lungtissue
-
-    def load_from_redis(self, url, port, pwd):
-        print("loading geometry from redis ...")
-        sys.stdout.flush()
-        connector = GeoConnector(url, port, pwd)
-        r = connector.get_redis()
-
-        xbin = r.hget('param', 'x')
-        ybin = r.hget('param', 'y')
-        zbin = r.hget('param', 'z')
-
-        self.xbin = int(xbin)
-        self.ybin = int(ybin)
-        self.zbin = int(zbin)
-
-        data = connector.deserialize_geo_1d(self.xbin, self.ybin, self.zbin)
-
-        # tissue_type_raw = r.hgetall("tissueType")
-        # tissue_type = b''
-        # for z in range(self.zbin):
-        #     tissue_type += tissue_type_raw[str(z).encode()]
-        # data = struct.unpack(self.xbin * self.ybin * self.zbin * 'B', tissue_type)
-
-        print("Dimension: ", self.xbin, self.ybin, self.zbin)
-        print("Number of Points: ", len(data))
-        sys.stdout.flush()
-
-        self.geo = Array(ctypes.c_double, self.xbin * self.ybin * self.zbin)
-        lungtissue = np.frombuffer(self.geo.get_obj())
-
-        for i in range(len(data)):
-            lungtissue[i] = data[i]
-
-
     def load_from_vtk(self, filename):
 
         print("Loading VTK file %s ..." % (filename))
@@ -727,9 +636,6 @@ class Geometry():
 #optional argrument
 # INPUT_FILE_OPTION = ['-i', '--input', 'input_filename']
 # OUTPUT_FILE_OPTION = ['-o', '--output', 'output_filename']
-# REDIS_URL_OPTION = ['-u', '--url', 'redis_url']
-# REDIS_PORT_OPTION = ['-P', '--port', 'redis_port']
-# REDIS_PWD_OPTION = ['-p', '--password', 'redis_password']
 
 def select_output(geometry, options):
 
@@ -739,27 +645,18 @@ def select_output(geometry, options):
         else:
             print("require output file name, see --help")
 
-    if options.write_to_redis:
-        geometry.write_to_redis(options.redis_url, options.redis_port, options.redis_pwd)
-
 def initialize_opt():
     parser = optparse.OptionParser()
 
     parser.add_option('-i', '--input', dest = 'input_filename')
     parser.add_option('-o', '--output', dest = 'output_filename')
 
-    parser.add_option('-u', '--url', dest = 'redis_url')
-    parser.add_option('-p', '--port', dest = 'redis_port')
-    parser.add_option('--pwd', dest = 'redis_pwd')
-
     parser.add_option('--preview', action = 'store_true', default = False, dest = 'preview')
 
     parser.add_option('--rjson', action = 'store_true', default = False, dest = "read_from_json")
     parser.add_option('--rvtk', action = 'store_true', default = False, dest = "read_from_vtk")
-    parser.add_option('--rredis', action = 'store_true', default = False, dest = "read_from_redis")
 
     parser.add_option('--wvtk', action = 'store_true', default = False, dest = 'write_to_vtk')
-    parser.add_option('--wredis', action = 'store_true', default = False, dest = "write_to_redis")
 
     return parser
 
@@ -805,11 +702,6 @@ def main(argv):
                 select_output(g, options)
         else:
             print("require input file name, see --help")
-
-
-    elif (options.read_from_redis):
-        g.load_from_redis(options.redis_url, options.redis_port, options.redis_pwd)
-        select_output(g, options)
 
     else:
         print("require input source, see --help")
