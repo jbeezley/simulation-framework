@@ -94,7 +94,10 @@ class State(object):
     """A container for storing the simulation state at a single time step."""
     time: float
     grid: RectangularGrid
-    geometry: Geometry
+    geometry: np.ndarray
+    xbin: float
+    ybin: float
+    zbin: float
 
     # simulation configuration
     config: 'SimulationConfig'
@@ -138,8 +141,8 @@ class State(object):
             config.getfloat('simulation', 'dx')
         )
         grid = RectangularGrid.construct_uniform(shape, spacing)
-        geometry = load_geo(config['simulation']['geometry_file'], config['simulation']['file_type'])
-        state = State(time=0.0, grid=grid, config=config, geometry=geometry)
+        xbin, ybin, zbin, geometry = load_geo(config['simulation']['geometry_file'], config['simulation']['file_type'])
+        state = State(time=0.0, grid=grid, config=config, geometry=geometry, xbin=xbin, ybin=ybin, zbin=zbin)
 
         for module in state.config.modules:
             if hasattr(state, module.name):
@@ -187,7 +190,7 @@ def grid_variable(dtype: np.dtype = np.dtype('float')) -> np.ndarray:
 
     return attr.ib(default=attr.Factory(factory, takes_self=True), validator=validate_numeric)
 
-def load_geo(input_file: str, input_type: str) -> Geometry:
+def load_geo(input_file: str, input_type: str) -> Tuple[float, float, float, np.ndarray]:
     import json
     from simulation.macro import QUADRIC
     from simulation.macro import VECTOR
@@ -216,4 +219,8 @@ def load_geo(input_file: str, input_type: str) -> Geometry:
             
             g.scaling(data["scaling"])
             g.construct()
-    return g
+
+    geometry = (np.frombuffer(g.geo.get_obj())).astype(int)
+    geometry = geometry.reshape(g.zbin, g.ybin, g.xbin)
+    
+    return g.xbin, g.ybin, g.zbin, geometry
